@@ -1,0 +1,154 @@
+/*
+Covid 19 Data Exploration 
+*/
+--Viewing the table
+Select *
+From credible-torus-410418.covid_deaths.covidD 
+
+
+-- Select Data that we intend to work with
+
+Select location, date, total_cases, new_cases, total_deaths, population
+From credible-torus-410418.covid_deaths.covidD
+Where continent is not null 
+order by location, date
+
+
+-- Total Cases vs Total Deaths
+-- Shows likelihood of dying if you contract covid in your country
+Select location, date, total_cases,total_deaths, (total_deaths/total_cases)*100 as DeathPercentage
+From credible-torus-410418.covid_deaths.covidD
+Where location='India'
+and continent is not null 
+order by location, date
+
+
+-- Total Cases vs Population
+-- Shows what percentage of population infected with Covid
+
+Select location, date, Population, total_cases,  (total_cases/population)*100 as PercentPopulationInfected
+From credible-torus-410418.covid_deaths.covidD
+order by location, date
+
+
+-- Countries with Highest Infection Rate compared to Population
+Select location, population, MAX(total_cases) as HighestInfectionCount,  Max((total_cases/population))*100 as PercentPopulationInfected
+From credible-torus-410418.covid_deaths.covidD
+Group by location, Population
+order by PercentPopulationInfected desc
+--
+Select location, population, date , MAX(total_cases) as HighestInfectionCount,  Max(total_cases/population)*100 as PercentPopulationInfected
+From credible-torus-410418.covid_deaths.covidD
+Group by location, Population,date
+order by PercentPopulationInfected desc
+--
+-- Countries with Highest Death Count per Population
+
+Select location, MAX(cast(Total_deaths as int)) as TotalDeathCount
+From credible-torus-410418.covid_deaths.covidD
+Where continent is not null 
+Group by location
+order by TotalDeathCount desc
+
+-- Showing contintents with the highest death count per population
+Select continent, MAX(cast(Total_deaths as int)) as TotalDeathCount
+From credible-torus-410418.covid_deaths.covidD
+Where continent is not null 
+Group by continent
+order by TotalDeathCount desc
+--
+Select location,Sum(new_deaths) as TotalDeathCount From `credible-torus-410418.covid_deaths.covidD` Where continent is null and location not in ('World', 'European Union', 'International') group by location order by TotalDeathCount DESC
+--
+-- GLOBAL NUMBERS
+Select SUM(new_cases) as total_cases, SUM(new_deaths) as total_deaths, SUM(new_deaths)/SUM(New_Cases)*100 as DeathPercentage
+From credible-torus-410418.covid_deaths.covidD
+where continent is not null 
+--Group By date
+order by 1,2
+
+-- Total Population vs Vaccinations
+-- Shows Percentage of Population that has recieved at least one Covid Vaccine
+WITH VaccinationData AS (
+  SELECT 
+    dth.continent,dth.location,dth.date,dth.population,
+    vac.new_vaccinations,
+    SUM(vac.new_vaccinations) OVER (PARTITION BY dth.location ORDER BY dth.location, dth.Date) as RollingPeopleVaccinated
+  FROM 
+    credible-torus-410418.covid_deaths.covidD dth
+  JOIN 
+    credible-torus-410418.covid_vaccinations.covidV vac
+  ON 
+    dth.location = vac.location AND dth.date = vac.date
+  WHERE 
+    dth.continent IS NOT NULL
+)
+SELECT 
+  continent,location,date,population,new_vaccinations,RollingPeopleVaccinated,
+  (RollingPeopleVaccinated/population)*100 AS PercentageVaccinated
+FROM 
+  VaccinationData
+ORDER BY 
+  2, 3;
+
+
+
+-- Using CTE to perform Calculation on Partition By in previous query
+
+WITH PopvsVac AS (
+  SELECT 
+    dth.continent,dth.location,dth.date,dth.population, vac.new_vaccinations,
+    SUM(vac.new_vaccinations) OVER (PARTITION BY dth.location ORDER BY dth.location, dth.Date) as RollingPeopleVaccinated
+  FROM 
+    credible-torus-410418.covid_deaths.covidD dth
+  JOIN 
+    credible-torus-410418.covid_vaccinations.covidV vac
+  ON 
+    dth.location = vac.location
+    AND dth.date = vac.date
+  WHERE 
+    dth.continent IS NOT NULL 
+)
+SELECT 
+  *,
+  (RollingPeopleVaccinated / Population) * 100 AS PercentageVaccinated
+FROM 
+  PopvsVac;
+
+
+
+-- Using Temp Table to perform Calculation on Partition By in previous query
+
+CREATE TEMP TABLE TempPercentPopulationVaccinated AS
+SELECT 
+  dth.continent,dth.location,dth.date,dth.population,
+  vac.new_vaccinations,
+  SUM(CAST(vac.new_vaccinations AS INT64)) OVER (PARTITION BY dth.location ORDER BY dth.location, dth.Date) as RollingPeopleVaccinated
+FROM 
+  credible-torus-410418.covid_deaths.covidD dth
+JOIN 
+  credible-torus-410418.covid_vaccinations.covidV vac
+ON 
+  dth.location = vac.location
+  AND dth.date = vac.date;
+
+SELECT 
+  *,
+  (RollingPeopleVaccinated / Population) * 100 AS PercentageVaccinated
+FROM 
+  TempPercentPopulationVaccinated;
+
+-- Creating View to store data for later visualizations
+CREATE VIEW `credible-torus-410418._script654fc7b03204ba27d59646d273842ff8813c6f3d.PercentPopulationVaccinatedVie` AS
+SELECT 
+  popu.continent,popu.location,popu.date,popu.population,
+  vacc.new_vaccinations,
+  SUM(CAST(vacc.new_vaccinations AS INT64)) OVER (PARTITION BY popu.location ORDER BY popu.location, popu.Date) AS RollingPeopleVaccinated
+FROM 
+  `credible-torus-410418.covid_deaths.covidD` popu
+JOIN 
+  `credible-torus-410418.covid_vaccinations.covidV` vacc
+ON 
+  popu.location = vacc.location
+  AND popu.date = vacc.date
+WHERE 
+  popu.continent IS NOT NULL;
