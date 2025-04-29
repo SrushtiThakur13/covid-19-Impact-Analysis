@@ -1,4 +1,4 @@
-# COVID-19 Data Exploration and Dashboard
+# COVID-19 Data Exploration
 
 This project explores global COVID-19 cases, deaths, and vaccinations using SQL-based data analysis,  
 followed by creating a professional Tableau dashboard for interactive visual storytelling.
